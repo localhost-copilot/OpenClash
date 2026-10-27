@@ -32,6 +32,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y luajit
           luajit tests/releases.lua
+          luajit tests/version-fetch.lua
           node tests/download-urls.js
           python3 -m unittest discover -s tests -v
 

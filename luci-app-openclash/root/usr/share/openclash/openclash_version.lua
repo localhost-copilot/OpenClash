@@ -139,8 +139,13 @@ local function try_fetch(urls, validator)
 		local winner = ""
 		for _, job in ipairs(jobs) do
 			if not job.done then
-				local ok_r, buf = pcall(try_read, job.fdi, 4096)
-				if ok_r and buf then job.buf = job.buf .. buf end
+				-- Release lists include asset metadata and can exceed the pipe buffer.
+				-- Drain available data so curl can finish within its network timeout.
+				while true do
+					local ok_r, buf = pcall(try_read, job.fdi, 65536)
+					if not ok_r or not buf then break end
+					job.buf = job.buf .. buf
+				end
 				local ok_w, wpid = pcall(nixio.waitpid, job.pid, "nohang")
 				if ok_w and wpid then
 					while true do
