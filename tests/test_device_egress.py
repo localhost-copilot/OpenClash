@@ -27,7 +27,7 @@ class DevicePolicyTest(unittest.TestCase):
         self.assertIsNotNone(LUA, "Lua or LuaJIT is required for service tests")
         result = subprocess.run([str(LUA), "tests/device-egress-service.lua"], cwd=REPO, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("15 tests passed", result.stdout)
+        self.assertIn("16 tests passed", result.stdout)
 
     def test_ui_state_and_mutation_behaviour(self):
         result = subprocess.run(["node", "tests/device-egress-ui.js"], cwd=REPO, capture_output=True, text=True)

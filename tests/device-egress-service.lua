@@ -3,7 +3,7 @@
 local policy = dofile("luci-app-openclash/luasrc/device_egress.lua")
 local files, objects, events, sections, saved, options, sequence, commits
 local guard_ok, commit_ok, ruby_calls
-local route_dump, route_ok
+local route_dump, route_ok, numeric_ok
 local nft_document, transitioning = nil, false
 local function clone(value)
 	if type(value) ~= "table" then return value end
@@ -67,6 +67,11 @@ package.preload['nixio'] = function() return {
 package.preload['luci.sys'] = function() return {
 	call = function(command)
 		if command:find("'ip' '-4' '-N' 'route'", 1, true) then
+			if not numeric_ok then return 255 end
+			files[command:match(" >'([^']+)'")] = route_dump
+			return route_ok and 0 or 1
+		end
+		if command:find("'ip' '-4' 'route'", 1, true) then
 			files[command:match(" >'([^']+)'")] = route_dump
 			return route_ok and 0 or 1
 		end
@@ -113,7 +118,7 @@ local function reset(initial)
 	files, objects, events, sections, options = {}, {}, {}, {}, {}
 	sequence, commits, ruby_calls = 0, 0, 0
 	guard_ok, commit_ok = true, true
-	route_dump, route_ok = "", true
+	route_dump, route_ok, numeric_ok = "", true, true
 	nft_document, transitioning = nil, false
 	for i, item in ipairs(initial or {}) do sections[i] = clone(item); sections[i]['.name'] = "device" .. i end
 	saved = clone(sections)
@@ -135,6 +140,18 @@ test("routing collision check accepts absent tables and rejects conflicts or fai
 	local ok, err = service.route_available()
 	assert(not ok and err == "Device egress routing table is already in use")
 	route_dump, route_ok = "", false
+	ok, err = service.route_available()
+	assert(not ok and err == "Cannot inspect device egress routing table")
+end)
+test("routing collision check falls back for iproute2 without -N and honours rt_tables aliases", function()
+	numeric_ok = false
+	route_dump = "local default dev lo table 789 scope host\n"
+	assert(service.route_available())
+	files["/etc/iproute2/rt_tables"] = "255\tlocal\n789\tegress\n"
+	route_dump = "10.0.0.0/24 dev eth0 table egress\n"
+	local ok, err = service.route_available()
+	assert(not ok and err == "Device egress routing table is already in use")
+	route_ok = false
 	ok, err = service.route_available()
 	assert(not ok and err == "Cannot inspect device egress routing table")
 end)

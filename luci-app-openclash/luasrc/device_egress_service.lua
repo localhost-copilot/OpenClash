@@ -458,12 +458,24 @@ function M.route_available()
 	-- table (including the ambiguous "Dump terminated"). Numeric names keep a
 	-- local rt_tables alias from concealing a collision in our reserved table.
 	local routes_ok, routes = run({"ip", "-4", "-N", "route", "show", "table", "all"})
+	local names = {policy.route_table}
+	if not routes_ok then
+		-- iproute2 before 5.4 (e.g. 5.0 on QWRT) lacks -N: match rt_tables aliases instead.
+		routes_ok, routes = run({"ip", "-4", "route", "show", "table", "all"})
+		for id, name in (fs.readfile("/etc/iproute2/rt_tables") or ""):gmatch("(%d+)%s+(%S+)") do
+			if id == policy.route_table then names[#names + 1] = name end
+		end
+	end
 	if not routes_ok then return false, "Cannot inspect device egress routing table" end
 	for line in routes:gmatch("[^\n]+") do
-		if (line .. " "):find(" table " .. policy.route_table .. " ", 1, true) then
-			line = line:gsub(" table " .. policy.route_table, "", 1)
-			local kind, destination, device = line:match("^(%S+)%s+(%S+)%s+dev%s+(%S+)")
-			if (kind ~= "local" and kind ~= "2") or (destination ~= "default" and destination ~= "0.0.0.0/0") or device ~= "lo" then return false, "Device egress routing table is already in use" end
+		for _, name in ipairs(names) do
+			local first, last = (line .. " "):find(" table " .. name .. " ", 1, true)
+			if first then
+				line = line:sub(1, first - 1) .. line:sub(last)
+				local kind, destination, device = line:match("^(%S+)%s+(%S+)%s+dev%s+(%S+)")
+				if (kind ~= "local" and kind ~= "2") or (destination ~= "default" and destination ~= "0.0.0.0/0") or device ~= "lo" then return false, "Device egress routing table is already in use" end
+				break
+			end
 		end
 	end
 	return true
