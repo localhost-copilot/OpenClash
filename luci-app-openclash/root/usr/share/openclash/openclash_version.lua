@@ -4,6 +4,7 @@ require "nixio"
 require "luci.model.uci"
 local fs = require "luci.openclash"
 local json = require "luci.jsonc"
+local core_release = require "luci.openclash_release"
 
 local M = {}
 
@@ -182,6 +183,68 @@ local function try_fetch(urls, validator)
 		end
 	end
 	return ""
+end
+
+local function fetch_releases(api_url, cdn)
+	local urls = { api_url }
+	local proxied = core_release.proxy_url(api_url, cdn)
+	if proxied ~= api_url then table.insert(urls, 1, proxied) end
+	local raw = try_fetch(urls, function(buf)
+		local ok, data = pcall(json.parse, buf)
+		return buf:match("^%s*%[") and ok and type(data) == "table"
+	end)
+	return raw ~= "" and json.parse(raw) or nil
+end
+
+function M.fetch_meta_releases(force, cdn)
+	local arch = fs.uci_get_config("config", "core_version") or "0"
+	local cached = (read_version_cache() or {}).clashcube
+	if not force and cached and cached.arch == arch and cached.repository == core_release.repository
+		and os.time() - (cached.cached_at or 0) < (cached.cache_ttl or 5) then
+		return cached.entries or {}, cached.error
+	end
+	local releases = fetch_releases(core_release.api_url, cdn)
+	local entries = core_release.parse_releases(releases, arch)
+	local err = not releases and "network_error" or (#entries == 0 and "no_release" or nil)
+	update_version_cache(function(parsed)
+		parsed.clashcube = { repository = core_release.repository, arch = arch, entries = entries,
+			error = err, cached_at = os.time(), cache_ttl = err and 5 or 300 }
+	end)
+	return entries, err
+end
+
+function M.fetch_plugin_releases(branch, force, cdn)
+	local cached = (read_version_cache() or {}).fork_plugin
+	if not force and cached and cached.branch == branch and cached.repository == core_release.plugin_repository
+		and os.time() - (cached.cached_at or 0) < (cached.cache_ttl or 5) then
+		return cached.entries or {}, cached.error
+	end
+	local releases = fetch_releases(core_release.plugin_api_url, cdn)
+	local entries = core_release.parse_plugin_releases(releases, branch)
+	local err = not releases and "network_error" or (#entries == 0 and "no_release" or nil)
+	update_version_cache(function(parsed)
+		parsed.fork_plugin = { repository = core_release.plugin_repository, branch = branch, entries = entries,
+			error = err, cached_at = os.time(), cache_ttl = err and 5 or 300 }
+	end)
+	return entries, err
+end
+
+function M.plugin_release(branch, tag, force, cdn)
+	local entries, err = M.fetch_plugin_releases(branch, force, cdn)
+	if not tag or tag == "" or tag == "__latest__" then return entries[1], err end
+	for _, entry in ipairs(entries) do
+		if entry.sha == tag then return entry end
+	end
+	return nil, err or "no_release"
+end
+
+function M.meta_release(tag, force, cdn)
+	local entries, err = M.fetch_meta_releases(force, cdn)
+	if not tag or tag == "" or tag == "__latest__" then return entries[1], err end
+	for _, entry in ipairs(entries) do
+		if entry.sha == tag then return entry end
+	end
+	return nil, err or "no_release"
 end
 
 function M.prepare_oix_cdn_data(force)
@@ -461,6 +524,8 @@ function M.fetch_version_history(branch, force, cdn, latest_only)
 	M.update_cdn_list()
 	local cur_oix = M.is_oix_mode()
 	local skip_core = cur_oix
+	local core_source = core_release.plugin_repository .. ":" .. core_release.repository .. ":"
+		.. (fs.uci_get_config("config", "core_version") or "0")
 	local github_address_mod = fs.uci_get_config("config", "github_address_mod") or "0"
 	if cdn and cdn ~= "" then
 		github_address_mod = cdn
@@ -474,7 +539,7 @@ function M.fetch_version_history(branch, force, cdn, latest_only)
 		if parsed and parsed[branch] and parsed[branch].cached_at then
 			local blk = parsed[branch]
 			local ttl = blk.cache_ttl or 300
-			if os.time() - blk.cached_at < ttl and blk.oix == cur_oix then
+			if os.time() - blk.cached_at < ttl and blk.oix == cur_oix and blk.core_source == core_source then
 				if latest_only then
 					local lt = blk.latest
 					if lt and lt.plugin and lt.plugin ~= "" and (cur_oix or (lt.core_meta and lt.core_meta ~= "")) then
@@ -486,21 +551,20 @@ function M.fetch_version_history(branch, force, cdn, latest_only)
 			end
 		end
 	end
+	local meta_entries, meta_error = {}, nil
+	if not skip_core then meta_entries, meta_error = M.fetch_meta_releases(force, github_address_mod) end
+	local plugin_entries, plugin_error = M.fetch_plugin_releases(branch, force, github_address_mod)
+	result.core_source = core_source
+	result.core_error = meta_error
 
 	if latest_only then
-		local plugin_latest = ""
-		local core_meta_latest = ""
+		local plugin_latest = plugin_entries[1] and plugin_entries[1].version or ""
+		local core_meta_latest = meta_entries[1] and meta_entries[1].version or ""
 		local core_smart_latest = ""
-
-		local plugin_raw = try_fetch(build_fetch_urls(github_address_mod, "package/" .. branch .. "/version"))
-		if plugin_raw and plugin_raw ~= "" then
-			plugin_latest = trim(plugin_raw:match("^[^\n\r]*") or "")
-		end
 
 		if not cur_oix then
 			local core_raw = try_fetch(build_fetch_urls(github_address_mod, "core/" .. branch .. "/core_version"))
 			if core_raw and core_raw ~= "" then
-				core_meta_latest = trim(core_raw:match("^[^\n\r]*") or "")
 				local after = core_raw:match("[\n\r]+(.*)")
 				if after then
 					core_smart_latest = trim(after:match("^[^\n\r]*") or "")
@@ -515,7 +579,7 @@ function M.fetch_version_history(branch, force, cdn, latest_only)
 		if cur_oix then
 			M.prepare_oix_cdn_data(force)
 		end
-		result.cache_ttl = (plugin_latest == "") and 5 or 300
+		result.cache_ttl = (plugin_latest == "" or meta_error) and 5 or 300
 		result.cached_at = os.time()
 		result.oix = cur_oix
 
@@ -526,6 +590,8 @@ function M.fetch_version_history(branch, force, cdn, latest_only)
 			blk.cache_ttl = result.cache_ttl
 			blk.cached_at = result.cached_at
 			blk.oix = cur_oix
+			blk.core_source = core_source
+			blk.core_error = meta_error
 			blk.plugin = nil
 			blk.core_meta = nil
 			blk.core_smart = nil
@@ -536,32 +602,7 @@ function M.fetch_version_history(branch, force, cdn, latest_only)
 		return result
 	end
 
-	local plugin_feed = fetch_commit_feed(github_address_mod, "package/" .. branch .. "/version")
-	local plugin_commits = parse_commit_feed(plugin_feed, 5)
-	if #plugin_commits > 0 then
-		local file_jobs = {}
-		for _, c in ipairs(plugin_commits) do
-			local job = fork_file_fetch(c.sha, branch .. "/version", github_address_mod)
-			if job then file_jobs[#file_jobs + 1] = job end
-		end
-
-		local file_results = collect_fork_results(file_jobs, 2)
-
-		for _, c in ipairs(plugin_commits) do
-			local raw = file_results[c.sha]
-			local ver
-			if raw and raw ~= "" then
-				ver = trim(raw:match("^[^\n\r]*") or "")
-				if not M.is_valid_version(ver) then ver = nil end
-			end
-			result.plugin[#result.plugin + 1] = {
-				version = ver,
-				date = c.date,
-				sha = c.sha,
-				message = c.message
-			}
-		end
-	end
+	result.plugin = plugin_entries
 
 	if not skip_core then
 		local core_feed = fetch_commit_feed(github_address_mod, "core/" .. branch .. "/core_version")
@@ -578,15 +619,8 @@ function M.fetch_version_history(branch, force, cdn, latest_only)
 			for _, c in ipairs(core_commits) do
 				local content = file_results[c.sha]
 				if content and content ~= "" then
-					local meta_ver = content:match("^[^\n\r]*")
 					local after_first = content:match("[\n\r]+(.*)")
 					local smart_ver = after_first and after_first:match("^[^\n\r]*") or nil
-					if meta_ver then
-						meta_ver = trim(meta_ver)
-						if M.is_valid_version(meta_ver) then
-							result.core_meta[#result.core_meta + 1] = { version = meta_ver, date = c.date, sha = c.sha }
-						end
-					end
 					if smart_ver then
 						smart_ver = trim(smart_ver)
 						if M.is_valid_version(smart_ver) then
@@ -597,6 +631,7 @@ function M.fetch_version_history(branch, force, cdn, latest_only)
 			end
 		end
 	end
+	result.core_meta = meta_entries
 
 	result.latest = {
 		plugin = (result.plugin[1] and result.plugin[1].version) or "",
@@ -611,15 +646,10 @@ function M.fetch_version_history(branch, force, cdn, latest_only)
 		end
 	end
 
-	local cache_ttl = 300
+	local cache_ttl = meta_error and 5 or 300
 	if #result.plugin == 0 then
-		if not plugin_feed or plugin_feed == "" then
-			result.error = "network_error"
-			cache_ttl = 5
-		else
-			result.error = "parse_error"
-			cache_ttl = 5
-		end
+		result.error = plugin_error or "no_release"
+		cache_ttl = 5
 	end
 
 	result.cache_ttl = cache_ttl
@@ -634,6 +664,12 @@ function M.fetch_version_history(branch, force, cdn, latest_only)
 end
 
 if arg and arg[0] and arg[0]:match("openclash_version%.lua$") then
+	if arg[1] == "--meta-release" then
+		local release = M.meta_release(arg[3], false, arg[2])
+		if not release then os.exit(1) end
+		print(json.stringify(release))
+		return M
+	end
 	local branch = fs.uci_get_config("config", "release_branch") or "master"
 	M.fetch_version_history(branch, arg[2], arg[1], arg[3] ~= "0")
 end

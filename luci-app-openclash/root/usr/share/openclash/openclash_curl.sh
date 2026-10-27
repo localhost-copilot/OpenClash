@@ -226,6 +226,7 @@ resolve_checksum_from_url() {
 
     CHECKSUM_URL=""
     CHECKSUM_FILENAME=""
+    CHECKSUM_REQUIRED=0
 
     [ -z "$url" ] && return 1
 
@@ -242,6 +243,10 @@ resolve_checksum_from_url() {
     esac
 
     case "$base" in
+        *"https://github.com/clash-cube/mihomo/releases/download/"*|*"https://github.com/localhost-copilot/OpenClash/releases/download/"*)
+            CHECKSUM_URL="${base%/*}/checksums.txt"
+            CHECKSUM_REQUIRED=1
+            ;;
         *"jsdelivr.net/gh/vernesong/OpenClash@"*)
             path="${base#*OpenClash@}"
             [ "${path%/*}" = "$path" ] && return 1
@@ -275,9 +280,13 @@ verify_sha256_checksum() {
 
     local expected_hash
     expected_hash=$(curl -sL -m 15 --connect-timeout 5 -H "User-Agent: $ua" "$checksum_url" 2>/dev/null \
-        | awk -v n="$expected_name" '$2 ~ n {print $1; exit} $0 ~ n {print $1; exit}')
+        | awk -v n="$expected_name" '{name=$2; sub(/^\*/, "", name); sub(/^\.\//, "", name); if (name == n) {print $1; exit}}')
 
     if [ -z "$expected_hash" ]; then
+        if [ "$CHECKSUM_REQUIRED" = "1" ]; then
+            LOG_ERROR "Checksum file unavailable or entry not found for【$expected_name】"
+            return 1
+        fi
         LOG_WARN "Checksum file unavailable or entry not found, skip verification for【$expected_name】"
         return 0
     fi
@@ -285,6 +294,10 @@ verify_sha256_checksum() {
     local actual_hash
     actual_hash=$(sha256sum "$file" 2>/dev/null | awk '{print $1}')
     if [ -z "$actual_hash" ]; then
+        if [ "$CHECKSUM_REQUIRED" = "1" ]; then
+            LOG_ERROR "Unable to compute checksum for【$expected_name】"
+            return 1
+        fi
         LOG_WARN "Unable to compute checksum, skip verification for【$expected_name】"
         return 0
     fi

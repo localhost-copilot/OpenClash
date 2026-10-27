@@ -14,6 +14,24 @@
 
 </div>
 
+## 此 Fork 的内核来源
+
+本 Fork 的 Meta 内核从 [clash-cube/mihomo 的正式 Release](https://github.com/clash-cube/mihomo/releases)
+下载，只接受 `vX.Y.Z-openconnect.N` 系列。插件的 Master / Developer 选项不改变这个内核来源。
+Smart 和 Oix 仍使用各自原有的来源；切换到它们会替换当前内核。
+插件自身从 [localhost-copilot/OpenClash 的 Release](https://github.com/localhost-copilot/OpenClash/releases)
+更新，避免官方安装包覆盖 Fork 定制。Master 仅接受正式版，Developer 也接受预发布版。
+
+发布产物约定为 `mihomo-linux-<架构>-<版本>.gz`（单个二进制的 gzip 文件），
+并同时提供内容为版本号的 `version.txt` 和记录压缩包 SHA256 的 `checksums.txt`。
+UPX 在发布端压缩二进制，路由器不需要安装 UPX。
+安装后继续使用 `/etc/openclash/core/clash_meta`，兼容现有配置、启动和备份流程。
+历史版本选择也使用该仓库的 Release；jsDelivr 不支持 Release 产物，因此使用直连，
+GitHub 下载代理仍可用。
+
+尚无正式 Release、缺少对应架构或校验失败时，更新会失败并保留原内核，不会回退到上游。
+手动上传内核仍可用。发布流程见 mihomo 仓库的 `.github/workflows/openconnect-release.yml`。
+
 ## 简介
 
 OpenClash 是一个面向 OpenWrt 的 LuCI 插件，用于管理 [Mihomo](https://github.com/MetaCubeX/mihomo)（原 Clash Meta）内核，兼容 Shadowsocks、ShadowsocksR、VMess、VLESS、Trojan、Snell、TUIC、Hysteria 等主流协议，通过灵活的规则配置实现按需分流与透明代理。
@@ -47,7 +65,7 @@ OpenClash 是一个面向 OpenWrt 的 LuCI 插件，用于管理 [Mihomo](https:
 
 ### 网页安装
 
-1. 从 [Release 页面](https://github.com/vernesong/OpenClash/releases) 下载对应架构的安装包（`*.ipk` 或 `*.apk`）；
+1. 从 [Release 页面](https://github.com/localhost-copilot/OpenClash/releases) 下载对应架构的安装包（`*.ipk` 或 `*.apk`）；
 2. 登录 OpenWrt 的 LuCI 后台，前往 **系统 → 软件包** 上传并安装；
 3. 刷新或者重新登录页面，在 **服务 → OpenClash** 中导入订阅或上传配置文件并启动。
 
@@ -59,14 +77,14 @@ OpenClash 是一个面向 OpenWrt 的 LuCI 插件，用于管理 [Mihomo](https:
 # opkg 系统（ipk）
 opkg update
 opkg install bash iptables dnsmasq-full curl ca-bundle ipset ip-full iptables-mod-tproxy iptables-mod-extra ruby ruby-yaml kmod-tun kmod-inet-diag unzip luci-compat luci luci-base
-curl -L --retry 2 https://api.github.com/repos/vernesong/OpenClash/releases/latest -o /tmp/openclash_version
+curl -L --retry 2 https://api.github.com/repos/localhost-copilot/OpenClash/releases/latest -o /tmp/openclash_version
 [ -f "/tmp/openclash_version" ] && download_url=$(cat /tmp/openclash_version | jsonfilter -e '@.assets[*].browser_download_url' | grep '\.ipk$') && curl -L --retry 2 "$download_url" -o /tmp/openclash.ipk || echo "OpenClash last version get failed"
 [ -f "/tmp/openclash.ipk" ] && opkg install /tmp/openclash.ipk || echo "OpenClash download failed"
 
 # apk 系统（apk）
 apk update
 apk add bash iptables dnsmasq-full curl ca-bundle ipset ip-full iptables-mod-tproxy iptables-mod-extra ruby ruby-yaml kmod-tun kmod-inet-diag unzip luci-compat luci luci-base
-curl -L --retry 2 https://api.github.com/repos/vernesong/OpenClash/releases/latest -o /tmp/openclash_version
+curl -L --retry 2 https://api.github.com/repos/localhost-copilot/OpenClash/releases/latest -o /tmp/openclash_version
 [ -f "/tmp/openclash_version" ] && download_url=$(cat /tmp/openclash_version | jsonfilter -e '@.assets[*].browser_download_url' | grep '\.apk$') && curl -L --retry 2 "$download_url" -o /tmp/openclash.apk || echo "OpenClash last version get failed"
 [ -f "/tmp/openclash.apk" ] && apk add -q --force-overwrite --clean-protected --allow-untrusted /tmp/openclash.apk || echo "OpenClash download failed"
 ```
@@ -77,14 +95,14 @@ curl -L --retry 2 https://api.github.com/repos/vernesong/OpenClash/releases/late
 # opkg 系统（ipk）
 opkg update
 opkg install bash dnsmasq-full curl ca-bundle ip-full ruby ruby-yaml kmod-tun kmod-inet-diag unzip kmod-nft-tproxy luci-compat luci luci-base
-curl -L --retry 2 https://api.github.com/repos/vernesong/OpenClash/releases/latest -o /tmp/openclash_version
+curl -L --retry 2 https://api.github.com/repos/localhost-copilot/OpenClash/releases/latest -o /tmp/openclash_version
 [ -f "/tmp/openclash_version" ] && download_url=$(cat /tmp/openclash_version | jsonfilter -e '@.assets[*].browser_download_url' | grep '\.ipk$') && curl -L --retry 2 "$download_url" -o /tmp/openclash.ipk || echo "OpenClash last version get failed"
 [ -f "/tmp/openclash.ipk" ] && opkg install /tmp/openclash.ipk || echo "OpenClash download failed"
 
 # apk 系统（apk）
 apk update
 apk add bash dnsmasq-full curl ca-bundle ip-full ruby ruby-yaml kmod-tun kmod-inet-diag unzip kmod-nft-tproxy luci-compat luci luci-base
-curl -L --retry 2 https://api.github.com/repos/vernesong/OpenClash/releases/latest -o /tmp/openclash_version
+curl -L --retry 2 https://api.github.com/repos/localhost-copilot/OpenClash/releases/latest -o /tmp/openclash_version
 [ -f "/tmp/openclash_version" ] && download_url=$(cat /tmp/openclash_version | jsonfilter -e '@.assets[*].browser_download_url' | grep '\.apk$') && curl -L --retry 2 "$download_url" -o /tmp/openclash.apk || echo "OpenClash last version get failed"
 [ -f "/tmp/openclash.apk" ] && apk add -q --force-overwrite --clean-protected --allow-untrusted /tmp/openclash.apk || echo "OpenClash download failed"
 ```
@@ -97,7 +115,7 @@ curl -L --retry 2 https://api.github.com/repos/vernesong/OpenClash/releases/late
 
 ## 下载
 
-最新版本请前往 [Releases](https://github.com/vernesong/OpenClash/releases/latest) 页面，按需选择对应的安装包：
+最新版本请前往 [Releases](https://github.com/localhost-copilot/OpenClash/releases/latest) 页面，按需选择对应的安装包：
 
 | 安装包 | 说明 |
 |--------|------|

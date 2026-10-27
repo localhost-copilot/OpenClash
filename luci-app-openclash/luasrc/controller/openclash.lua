@@ -300,6 +300,7 @@ local function sanitize_subconverter_version_text(text)
 end
 
 local ov = dofile("/usr/share/openclash/openclash_version.lua")
+local core_release = require "luci.openclash_release"
 
 local function coremetacv()
 	if not fs.access(meta_core_path) then
@@ -3598,6 +3599,11 @@ function action_cdn_info()
 	local force = HTTP.formvalue("force") == "1"
 	local merge = HTTP.formvalue("merge") == "1"
 	local cur_oix = is_oix()
+	local clashcube_mode = not cur_oix and fs.uci_get_config("config", "smart_enable") ~= "1"
+	local meta_release = clashcube_mode and ov.meta_release(core_ver, force, fs.uci_get_config("config", "github_address_mod")) or nil
+	local plugin_release = ov.plugin_release(branch, plugin_ver, force, fs.uci_get_config("config", "github_address_mod"))
+	local core_source = core_release.plugin_repository .. ":" .. core_release.repository .. ":" .. (fs.uci_get_config("config", "core_version") or "0")
+		.. ":" .. tostring(clashcube_mode)
 	local function version_ident(v)
 		if v ~= "" and v ~= "__latest__" then return v end
 		return nil
@@ -3623,7 +3629,7 @@ function action_cdn_info()
 			local ok, parsed = pcall(json.parse, cached)
 			if ok and parsed and type(parsed) == "table" then
 				local entry = parsed[cache_key]
-				if entry and entry.cached_at and entry.oix == cur_oix then
+				if entry and entry.cached_at and entry.oix == cur_oix and entry.core_source == core_source then
 					local ttl = entry.cache_ttl or 300
 					if (os.time() - entry.cached_at) < ttl then
 						parsed_cache = entry
@@ -3657,6 +3663,12 @@ function action_cdn_info()
 	end
 
 	local function build_version_url(cdn, file_type)
+		if file_type == "plugin" then
+			return plugin_release and core_release.proxy_url(plugin_release.version_url, cdn) or ""
+		end
+		if file_type == "core" and clashcube_mode then
+			return meta_release and core_release.proxy_url(meta_release.version_url, cdn) or ""
+		end
 		if file_type == "core" and is_oix() then
 			local oix_version = "https://github.com/vernesong/mihomo-oix/releases/download/Pre-Alpha/version.txt"
 			local oix_dler = "https://dl.dler.io/mihomo-oix/version.txt?tag=Pre-Alpha"
@@ -3694,8 +3706,12 @@ function action_cdn_info()
 		local ok, parsed = pcall(json.parse, data)
 		if not ok or not parsed or type(parsed) ~= "table" then return nil end
 		if parsed.plugin_ver and not ov.is_valid_version(parsed.plugin_ver) then parsed.plugin_ver = "" end
+		if not plugin_release or parsed.plugin_ver ~= plugin_release.version then parsed.plugin_ver = "" end
 		if parsed.core_meta_ver and not ov.is_valid_version(parsed.core_meta_ver) then parsed.core_meta_ver = "" end
 		if parsed.core_smart_ver and not ov.is_valid_version(parsed.core_smart_ver) then parsed.core_smart_ver = "" end
+		if clashcube_mode and (not meta_release or parsed.core_meta_ver ~= meta_release.version) then
+			parsed.core_meta_ver = ""
+		end
 		return parsed
 	end
 
@@ -3732,7 +3748,7 @@ function action_cdn_info()
 		local plugin_url = build_version_url(cdn, "plugin")
 		local core_url = build_version_url(cdn, "core")
 		local raw_core_url = ""
-		if not is_oix() then
+		if not is_oix() and not clashcube_mode then
 			local raw_ref = (core_ver ~= "" and core_ver ~= "__latest__") and core_ver or "core"
 			raw_core_url = "https://raw.githubusercontent.com/vernesong/OpenClash/" .. raw_ref .. "/" .. branch .. "/core_version"
 		end
@@ -4003,7 +4019,8 @@ printf '{"plugin_ver":"%%s","core_meta_ver":"%%s","core_smart_ver":"%%s","latenc
 		result = result,
 		cache_ttl = cache_ttl,
 		cached_at = now,
-		oix = cur_oix
+		oix = cur_oix,
+		core_source = core_source
 	}
 	fs.writefile(cache_file, json.stringify(cdn_cache))
 end

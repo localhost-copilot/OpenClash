@@ -7,6 +7,7 @@ on:
 
 jobs:
   Get-Commit-id:
+    if: github.repository == 'vernesong/OpenClash'
     runs-on: ubuntu-latest
     outputs:
       current_id: ${{ steps.current_id.outputs.current_id }}

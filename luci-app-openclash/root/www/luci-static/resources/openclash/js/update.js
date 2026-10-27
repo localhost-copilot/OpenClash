@@ -109,14 +109,23 @@
             return proxyURL;
         }
 
+        if (type === 'core' && smart_enable.value !== '1') {
+            if (!/^v\d+\.\d+\.\d+-openconnect\.\d+$/.test(version) || !arch || arch === '0') return '';
+            var releaseURL = 'https://github.com/clash-cube/mihomo/releases/download/' + version +
+                '/mihomo-' + arch + '-' + version + '.gz';
+            return classifyAddr(addr) === 'proxy' ? addr + releaseURL : releaseURL;
+        }
+
         if (type === 'plugin') {
+            if (!/^v\d+\.\d+\.\d+[\d.]*$/.test(version)) return '';
             var verNoV = version.replace(/^v/, '');
             if (pkgType === 'apk') {
                 filename = 'luci-app-openclash-' + verNoV + '.apk';
             } else {
                 filename = 'luci-app-openclash_' + verNoV + '_all.ipk';
             }
-            pathPrefix = 'package/' + branch;
+            var pluginURL = 'https://github.com/localhost-copilot/OpenClash/releases/download/' + version + '/' + filename;
+            return classifyAddr(addr) === 'proxy' ? addr + pluginURL : pluginURL;
         } else {
             filename = 'clash-' + arch + '.tar.gz';
             var coreSubPath = (smart_enable.value === '1') ? 'smart' : 'meta';
@@ -124,7 +133,7 @@
         }
 
         if (sha) {
-            var refPath = (type === 'plugin') ? branch : branch + '/' + coreSubPath;
+            var refPath = branch + '/' + coreSubPath;
             if (isJsDelivr)
                 return addr + 'gh/vernesong/OpenClash@' + sha + '/' + refPath + '/' + filename;
             else if (classifyAddr(addr) === 'raw')

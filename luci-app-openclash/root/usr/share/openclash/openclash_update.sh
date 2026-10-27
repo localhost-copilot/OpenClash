@@ -130,6 +130,10 @@ else
 fi
 
 if [ "$PLUGIN_DIRECT" -eq 1 ]; then
+   case "$3" in
+      *https://github.com/localhost-copilot/OpenClash/releases/download/*) ;;
+      *) LOG_ERROR "Plugin updates must use localhost-copilot/OpenClash releases"; early_exit 1 ;;
+   esac
    # Direct download URL (historical version / downgrade) — skip version compare
    if [ "$PKG_TYPE" = "opkg" ]; then
       DOWNLOAD_URL="$3"
@@ -142,33 +146,17 @@ if [ "$PLUGIN_DIRECT" -eq 1 ]; then
    LOG_TIP "Start downloading【OpenClash - v$LAST_VER】..."
 elif [ -n "$OP_CV" ] && [ -n "$OP_LV" ] && version_compare "$OP_CV" "$OP_LV" && [ -n "$PLUGIN_LATEST" ]; then
    LOG_TIP "Start downloading【OpenClash - v$LAST_VER】..."
-   if [ "$github_address_mod" != "0" ]; then
-      if [ "$github_address_mod" == "https://cdn.jsdelivr.net/" ] || [ "$github_address_mod" == "https://fastly.jsdelivr.net/" ] || [ "$github_address_mod" == "https://testingcf.jsdelivr.net/" ]; then
-         if [ "$PKG_TYPE" = "opkg" ]; then
-            DOWNLOAD_URL="${github_address_mod}gh/vernesong/OpenClash@package/${RELEASE_BRANCH}/luci-app-openclash_${LAST_VER}_all.ipk"
-            DOWNLOAD_PATH="/tmp/openclash.ipk"
-         else
-            DOWNLOAD_URL="${github_address_mod}gh/vernesong/OpenClash@package/${RELEASE_BRANCH}/luci-app-openclash-${LAST_VER}.apk"
-            DOWNLOAD_PATH="/tmp/openclash.apk"
-         fi
-      else
-         if [ "$PKG_TYPE" = "opkg" ]; then
-            DOWNLOAD_URL="${github_address_mod}https://raw.githubusercontent.com/vernesong/OpenClash/package/${RELEASE_BRANCH}/luci-app-openclash_${LAST_VER}_all.ipk"
-            DOWNLOAD_PATH="/tmp/openclash.ipk"
-         else
-            DOWNLOAD_URL="${github_address_mod}https://raw.githubusercontent.com/vernesong/OpenClash/package/${RELEASE_BRANCH}/luci-app-openclash-${LAST_VER}.apk"
-            DOWNLOAD_PATH="/tmp/openclash.apk"
-         fi
-      fi
+   if [ "$PKG_TYPE" = "opkg" ]; then
+      DOWNLOAD_URL="https://github.com/localhost-copilot/OpenClash/releases/download/v${LAST_VER}/luci-app-openclash_${LAST_VER}_all.ipk"
+      DOWNLOAD_PATH="/tmp/openclash.ipk"
    else
-      if [ "$PKG_TYPE" = "opkg" ]; then
-         DOWNLOAD_URL="https://raw.githubusercontent.com/vernesong/OpenClash/package/${RELEASE_BRANCH}/luci-app-openclash_${LAST_VER}_all.ipk"
-         DOWNLOAD_PATH="/tmp/openclash.ipk"
-      else
-         DOWNLOAD_URL="https://raw.githubusercontent.com/vernesong/OpenClash/package/${RELEASE_BRANCH}/luci-app-openclash-${LAST_VER}.apk"
-         DOWNLOAD_PATH="/tmp/openclash.apk"
-      fi
+      DOWNLOAD_URL="https://github.com/localhost-copilot/OpenClash/releases/download/v${LAST_VER}/luci-app-openclash-${LAST_VER}.apk"
+      DOWNLOAD_PATH="/tmp/openclash.apk"
    fi
+   case "$github_address_mod" in
+      0|""|https://cdn.jsdelivr.net/|https://fastly.jsdelivr.net/|https://testingcf.jsdelivr.net/) ;;
+      *) DOWNLOAD_URL="${github_address_mod}${DOWNLOAD_URL}" ;;
+   esac
 else
    if [ -z "$PLUGIN_LATEST" ] || [ -z "$OP_CV" ] || [ -z "$OP_LV" ]; then
       LOG_ERROR "Failed to get version information, please try again later..."

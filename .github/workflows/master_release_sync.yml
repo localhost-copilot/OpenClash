@@ -7,6 +7,7 @@ on:
 
 jobs:
   Sync_core_to_master:
+    if: github.repository == 'vernesong/OpenClash'
     runs-on: ubuntu-latest
     steps:
       - name: Apt Update

@@ -20,6 +20,7 @@ inc_job_counter
 
 restart=0
 UPDATE_SUCCESS=0
+UPDATE_NEEDED=0
 github_address_mod=$(uci_get_config "github_address_mod" || echo 0)
 DIRECT_CORE_URL=""
 if [ -n "$2" ] && echo "$2" | grep -qE '^https?://'; then
@@ -53,7 +54,30 @@ small_flash_memory=$(uci_get_config "small_flash_memory")
 CPU_MODEL=$(uci_get_config "core_version")
 RELEASE_BRANCH=$(uci_get_config "release_branch" || echo "master")
 
-if [ -z "$DIRECT_CORE_URL" ]; then
+core_update_failed() {
+   LOG_ERROR "$1"
+   dec_job_counter_and_restart 0
+   del_lock
+   exit 1
+}
+
+if [ "$CORE_TYPE" = "Meta" ]; then
+   release_tag=""
+   if [ -n "$DIRECT_CORE_URL" ]; then
+      release_tag=$(printf '%s' "$DIRECT_CORE_URL" | sed -n 's|.*https://github.com/clash-cube/mihomo/releases/download/\([^/]*\)/[^/]*$|\1|p')
+      [ -n "$release_tag" ] || core_update_failed "Meta core updates must use clash-cube/mihomo OpenConnect releases"
+   fi
+   CORE_RELEASE=$(lua /usr/share/openclash/openclash_version.lua --meta-release "$github_address_mod" "$release_tag") ||
+      core_update_failed "No published clash-cube/mihomo OpenConnect release is available for【$CPU_MODEL】"
+   CORE_LV=$(printf '%s' "$CORE_RELEASE" | jsonfilter -e '@.version')
+   CORE_RELEASE_URL=$(printf '%s' "$CORE_RELEASE" | jsonfilter -e '@.url')
+   CORE_ASSET=$(printf '%s' "$CORE_RELEASE" | jsonfilter -e '@.asset')
+   [ -n "$CORE_LV" ] && [ -n "$CORE_RELEASE_URL" ] && [ -n "$CORE_ASSET" ] ||
+      core_update_failed "Invalid clash-cube/mihomo release metadata"
+   if [ -n "$DIRECT_CORE_URL" ] && [ "${DIRECT_CORE_URL##*/}" != "$CORE_ASSET" ]; then
+      core_update_failed "The selected release asset does not match【$CPU_MODEL】"
+   fi
+elif [ -z "$DIRECT_CORE_URL" ]; then
    lua /usr/share/openclash/openclash_version.lua "$github_address_mod" 2>/dev/null
    if [ "$CORE_TYPE" = "Oix" ]; then
       CORE_LV=$(jsonfilter -i /tmp/openclash_version_history.json -e "@.oix.ver" 2>/dev/null)
@@ -63,9 +87,7 @@ if [ -z "$DIRECT_CORE_URL" ]; then
       CORE_LV=$(jsonfilter -i /tmp/openclash_version_history.json -e "@.${RELEASE_BRANCH}.latest.core_meta" 2>/dev/null)
    fi
    if [ -z "$CORE_LV" ]; then
-      LOG_ERROR "【"$CORE_TYPE"】Core Version Check Error, Please Try Again Later..."
-      del_lock
-      exit 0
+      core_update_failed "【$CORE_TYPE】Core Version Check Error, Please Try Again Later..."
    fi
 fi
 
@@ -81,7 +103,7 @@ TARGET_CORE_PATH="$meta_core_path"
 CORE_CV=$($TARGET_CORE_PATH -v 2>/dev/null |awk -F ' ' '{print $3}' |head -1)
 TMP_FILE="${TARGET_CORE_PATH}.new.$$"
 
-if [ "$CORE_TYPE" = "Oix" ]; then
+if [ "$CORE_TYPE" = "Oix" ] || [ "$CORE_TYPE" = "Meta" ]; then
    CORE_URL_PATH=""
    DOWNLOAD_FILE="/tmp/clash_meta.gz"
 elif [ "$CORE_TYPE" = "Smart" ]; then
@@ -95,11 +117,18 @@ fi
 [ "$C_CORE_TYPE" != "$CORE_TYPE" ] || [ -z "$C_CORE_TYPE" ] && restart=1
 
 if [ -n "$DIRECT_CORE_URL" ] || [ "$CORE_CV" != "$CORE_LV" ] || [ -z "$CORE_CV" ]; then
+   UPDATE_NEEDED=1
    if [ "$CPU_MODEL" != 0 ]; then
       LOG_TIP "【"$CORE_TYPE"】Core Downloading, Please Try to Download and Upload Manually If Fails"
       # If $2 is a full download URL, use it directly
       if [ -n "$2" ] && echo "$2" | grep -qE '^https?://'; then
          DOWNLOAD_URL="$2"
+      elif [ "$CORE_TYPE" = "Meta" ]; then
+         case "$github_address_mod" in
+            0|""|https://cdn.jsdelivr.net/|https://fastly.jsdelivr.net/|https://testingcf.jsdelivr.net/)
+               DOWNLOAD_URL="$CORE_RELEASE_URL" ;;
+            *) DOWNLOAD_URL="${github_address_mod}${CORE_RELEASE_URL}" ;;
+         esac
       elif [ "$CORE_TYPE" = "Oix" ]; then
          OIX_CORE_URL="https://github.com/vernesong/mihomo-oix/releases/download/Pre-Alpha/mihomo-${CPU_MODEL}-${CORE_LV}.gz"
          OIX_CORE_P_URL="https://dl.dler.io/mihomo-oix/mihomo-${CPU_MODEL}-${CORE_LV}.gz?tag=Pre-Alpha"
@@ -139,7 +168,7 @@ if [ -n "$DIRECT_CORE_URL" ] || [ "$CORE_CV" != "$CORE_LV" ] || [ -z "$CORE_CV" 
                extract_success=true
                extract_err=""
                [ -s "$DOWNLOAD_FILE" ] && {
-                  if [ "$CORE_TYPE" = "Oix" ]; then
+                  if [ "$CORE_TYPE" = "Oix" ] || [ "$CORE_TYPE" = "Meta" ]; then
                      extract_err=$(gzip -dc "$DOWNLOAD_FILE" > "$TMP_FILE" 2>&1) || extract_success=false
                   else
                      extract_err=$(tar zxvfo "$DOWNLOAD_FILE" -C /tmp 2>&1) || extract_success=false
@@ -148,6 +177,13 @@ if [ -n "$DIRECT_CORE_URL" ] || [ "$CORE_CV" != "$CORE_LV" ] || [ -z "$CORE_CV" 
                   rm -rf "$DOWNLOAD_FILE" >/dev/null 2>&1
                   [ "$extract_success" = "true" ] && { extract_err=$(chmod 4755 "$TMP_FILE" 2>&1) || extract_success=false; }
                   [ "$extract_success" = "true" ] && { extract_err=$("$TMP_FILE" -v 2>&1) || extract_success=false; }
+                  if [ "$extract_success" = "true" ] && [ "$CORE_TYPE" = "Meta" ]; then
+                     downloaded_version=$(printf '%s\n' "$extract_err" | awk 'NR==1 {print $3}')
+                     if [ "$downloaded_version" != "$CORE_LV" ]; then
+                        extract_err="Core version mismatch: expected $CORE_LV, got $downloaded_version"
+                        extract_success=false
+                     fi
+                  fi
                }
 
                if [ "$extract_success" != "true" ]; then
@@ -214,3 +250,4 @@ rm -rf "$TMP_FILE" >/dev/null 2>&1
 [ "$UPDATE_SUCCESS" = "1" ] && restart=1 || restart=0
 dec_job_counter_and_restart "$restart"
 del_lock
+if [ "$UPDATE_NEEDED" = "1" ] && [ "$UPDATE_SUCCESS" != "1" ]; then exit 1; fi
