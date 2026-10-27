@@ -1,0 +1,12 @@
+#!/bin/sh /etc/rc.common
+START=18
+STOP=99
+
+start() {
+	/usr/share/openclash/device_egress_guard.sh load
+}
+
+stop() {
+	# Protection outlives service stop, restart and core crashes.
+	return 0
+}

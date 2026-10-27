@@ -190,6 +190,8 @@ if [ -f "/tmp/openclash.bak" ]; then
 		fi
 	fi
 	mv -f "/tmp/openclash.bak" "/etc/config/openclash" >/dev/null 2>&1
+	# The live guard cache survives package replacement; never copy over it.
+	rm -f "/tmp/openclash/device-guard.nft"
 	cp -rf "/tmp/openclash/." "/etc/openclash/" >/dev/null 2>&1
 	#ui
 	if [ -d "/tmp/openclash_ui/" ]; then

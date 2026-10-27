@@ -1,0 +1,3 @@
+/etc/config/openclash
+/etc/openclash/device-guard.nft
+/etc/openclash/device-guard.json

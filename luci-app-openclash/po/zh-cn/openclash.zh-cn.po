@@ -5437,3 +5437,297 @@ msgstr "恢复默认配置"
 
 msgid "Start Test"
 msgstr "开始测试"
+
+msgid "Device Egress"
+msgstr "设备出口"
+
+msgid "Route all Internet traffic from selected devices through one node or group. These devices lose Internet access when OpenClash stops, restarts or fails to start; they never connect directly."
+msgstr "让指定设备的全部外网流量只走一个节点或策略组。OpenClash 停止、重启或启动失败时，这些设备会断网，不会直连。"
+
+msgid "Bound devices bypass mainland bypass, blacklists, whitelists, source traffic access control and proxy mode (global/direct); IPv6 Internet access is blocked. Groups selected as egress exclude direct nodes and reject connections when no usable nodes remain; other devices using the same group are also affected."
+msgstr "绑定的设备不受大陆绕过、黑白名单、来源流量访问控制、代理模式（全局/直连）影响；IPv6 外网会被阻断。被选作出口的策略组会排除直连类节点，组内没有可用节点时拒绝连接，使用同一策略组的其他设备也会受影响。"
+
+msgid "+ Add device"
+msgstr "+ 添加设备"
+
+msgid "Add device"
+msgstr "添加设备"
+
+msgid "Edit device"
+msgstr "编辑设备"
+
+msgid "Device egress is not configured"
+msgstr "未设置设备出口"
+
+msgid "After adding a device, it loses Internet access when OpenClash stops and never connects directly."
+msgstr "添加设备后，这台设备在 OpenClash 停止时会断网，不会直连。"
+
+msgid "Protection is active"
+msgstr "断网保护已生效"
+
+msgid "%d devices: %d using nodes, %d blocked"
+msgstr "%d 台设备：%d 台走节点，%d 台已阻断"
+
+msgid "Protection is inactive"
+msgstr "断网保护未生效"
+
+msgid "These devices may connect directly when OpenClash stops."
+msgstr "这些设备在 OpenClash 停止时可能直连。"
+
+msgid "Reapply protection"
+msgstr "重新应用保护"
+
+msgid "Status unknown"
+msgstr "状态未知"
+
+msgid "Unable to retrieve status; retrying."
+msgstr "无法获取状态，正在重试。"
+
+msgid "Paused"
+msgstr "已暂停"
+
+msgid "Uses ordinary rules"
+msgstr "按普通规则上网"
+
+msgid "Unprotected"
+msgstr "未保护"
+
+msgid "May connect directly when stopped"
+msgstr "停止时可能直连"
+
+msgid "Blocked"
+msgstr "已阻断"
+
+msgid "OpenClash is not running"
+msgstr "OpenClash 未运行"
+
+msgid "OpenClash is running"
+msgstr "OpenClash 运行中"
+
+msgid "OpenClash is starting"
+msgstr "OpenClash 正在启动"
+
+msgid "Egress is missing from the current configuration"
+msgstr "出口不在当前配置中"
+
+msgid "Group contains DIRECT"
+msgstr "策略组包含 DIRECT"
+
+msgid "Core has not loaded device egress; check the runtime log"
+msgstr "内核未加载设备出口，查看运行日志"
+
+msgid "Device IP has changed to %s"
+msgstr "设备 IP 已变为 %s"
+
+msgid "Using node"
+msgstr "走节点"
+
+msgid "Node"
+msgstr "节点"
+
+msgid "Group"
+msgstr "策略组"
+
+msgid "Current %s"
+msgstr "当前 %s"
+
+msgid "Online"
+msgstr "在线"
+
+msgid "Offline"
+msgstr "离线"
+
+msgid "Configuration %s"
+msgstr "配置 %s"
+
+msgid "Updated at %s"
+msgstr "更新于 %s"
+
+msgid "Device"
+msgstr "设备"
+
+msgid "Egress"
+msgstr "出口"
+
+msgid "More actions"
+msgstr "更多操作"
+
+msgid "Pause"
+msgstr "暂停"
+
+msgid "Resume"
+msgstr "恢复"
+
+msgid "Test latency"
+msgstr "测试延迟"
+
+msgid "Change egress"
+msgstr "修改出口"
+
+msgid "Runtime log"
+msgstr "运行日志"
+
+msgid "Use new IP"
+msgstr "改用新 IP"
+
+msgid "Search name, IP or MAC"
+msgstr "搜索名称、IP 或 MAC"
+
+msgid "Static IP"
+msgstr "已固定 IP"
+
+msgid "Dynamic IP"
+msgstr "动态 IP"
+
+msgid "Already added"
+msgstr "已添加"
+
+msgid "Manual entry"
+msgstr "手动输入"
+
+msgid "Name"
+msgstr "名称"
+
+msgid "MAC"
+msgstr "MAC"
+
+msgid "IPv4"
+msgstr "IPv4"
+
+msgid "This IP is assigned dynamically by DHCP. If it changes, this device loses Internet access."
+msgstr "这个 IP 由 DHCP 动态分配。IP 变化后这台设备会被断网。"
+
+msgid "Fix this IP"
+msgstr "固定这个 IP"
+
+msgid "Fixed"
+msgstr "已固定"
+
+msgid "Search nodes or groups"
+msgstr "搜索节点或策略组"
+
+msgid "Contains DIRECT; unavailable"
+msgstr "包含 DIRECT，不能使用"
+
+msgid "The node list comes from the current configuration %s. If a new configuration has no egress with the same name, this device loses Internet access."
+msgstr "节点列表来自当前配置 %s。切换配置后，如果新配置里没有同名出口，这台设备会被断网。"
+
+msgid "After saving:"
+msgstr "保存后："
+
+msgid "This device's IPv4 Internet traffic only uses the selected egress"
+msgstr "这台设备的 IPv4 外网流量只走所选出口"
+
+msgid "IPv6 Internet access is blocked"
+msgstr "IPv6 外网会被阻断"
+
+msgid "No Internet access when OpenClash stops, restarts or fails to start; never a direct connection"
+msgstr "OpenClash 停止、重启或启动失败时断网，不会直连"
+
+msgid "If OpenClash is running, it reloads and interrupts connections for all devices for a few seconds"
+msgstr "OpenClash 正在运行时会重新加载，所有设备的连接会中断几秒"
+
+msgid "Save and apply"
+msgstr "保存并应用"
+
+msgid "Applying…"
+msgstr "正在应用…"
+
+msgid "Delete device egress for %s?"
+msgstr "删除 %s 的设备出口？"
+
+msgid "After deletion, this device uses ordinary OpenClash rules and connects directly when OpenClash stops."
+msgstr "删除后，这台设备会按 OpenClash 的普通规则上网；OpenClash 停止时它会直连。"
+
+msgid "Pause device egress for %s?"
+msgstr "暂停 %s 的设备出口？"
+
+msgid "While paused, this device uses ordinary rules and connects directly when OpenClash stops."
+msgstr "暂停期间，这台设备按普通规则上网；OpenClash 停止时它会直连。"
+
+msgid "This device already has an egress."
+msgstr "这台设备已经设置过出口。"
+
+msgid "This IP is already used by %s."
+msgstr "这个 IP 已被 %s 使用。"
+
+msgid "IP is outside the LAN subnet %s."
+msgstr "IP 不在局域网网段 %s 内。"
+
+msgid "The router's own address cannot be used."
+msgstr "不能使用路由器自身的地址。"
+
+msgid "Invalid MAC address format."
+msgstr "MAC 地址格式不正确。"
+
+msgid "Please select an egress."
+msgstr "请选择出口。"
+
+msgid "This group contains DIRECT and may connect directly; it cannot be used for device egress."
+msgstr "这个策略组包含 DIRECT，可能直连，不能用于设备出口。"
+
+msgid "A maximum of 32 devices is allowed."
+msgstr "最多设置 32 台设备。"
+
+msgid "Failed to write protection rules; nothing was saved."
+msgstr "保护规则写入失败，没有保存。"
+
+msgid "Flow offloading is enabled. Established connections may bypass protection. Disabling it is recommended."
+msgstr "已开启流量卸载，已建立的连接可能绕过断网保护。建议关闭。"
+
+msgid "Go to firewall settings"
+msgstr "前往防火墙设置"
+
+msgid "This firmware does not support device egress (requires firewall4 / nftables)."
+msgstr "当前固件不支持设备出口（需要 firewall4 / nftables）。"
+
+msgid "%s uses a random MAC. Disable rotating / private addresses for this network in the device's Wi-Fi settings, otherwise a MAC change will remove its protection."
+msgstr "%s 使用随机 MAC。请在该设备的 Wi‑Fi 设置里对本网络关闭「轮换 / 私有地址」，否则 MAC 变化后它会失去保护。"
+
+msgid "No device egress configured yet"
+msgstr "还没有设置设备出口"
+
+msgid "Show details"
+msgstr "查看详细信息"
+
+msgid "Unable to read the current configuration."
+msgstr "无法读取当前配置。"
+
+msgid "Unable to apply device egress."
+msgstr "无法应用设备出口。"
+
+msgid "Invalid device settings."
+msgstr "设备设置无效。"
+
+msgid "Invalid device name."
+msgstr "设备名称无效。"
+
+msgid "Egress is missing from the current configuration."
+msgstr "出口不在当前配置中。"
+
+msgid "Invalid request token."
+msgstr "请求令牌无效。"
+
+msgid "Another operation is in progress."
+msgstr "另一个操作正在进行。"
+
+msgid "Unable to generate device listeners."
+msgstr "无法生成设备入站。"
+
+msgid "Unable to save device settings."
+msgstr "无法保存设备设置。"
+
+msgid "Unable to save DHCP reservation."
+msgstr "无法保存静态租约。"
+
+msgid "Unable to reload dnsmasq."
+msgstr "无法重新加载 dnsmasq。"
+
+msgid "Core reload failed. Devices remain blocked."
+msgstr "内核重新加载失败，设备仍被阻断。"
+
+msgid "Status"
+msgstr "状态"
+
+msgid "Fixed to %s"
+msgstr "已固定为 %s"

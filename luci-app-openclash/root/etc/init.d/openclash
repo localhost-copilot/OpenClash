@@ -835,10 +835,10 @@ check_core_status()
    # redirect dns setting after core started, prevent core dns lookup failure
    if [ "$1" == "start" ]; then
       change_dnsmasq "$enable_redirect_dns"
-      set_firewall
+      set_firewall || start_fail
       LOG_TIP "OpenClash Start Successful!"
    else
-      set_firewall
+      set_firewall || start_fail
       LOG_TIP "Firewall Reload Successful!"
    fi
 
@@ -1081,6 +1081,10 @@ firewall_lan_ac_traffic()
    if [ "${proto}" == "both" ]; then e_tcp=true; e_udp=true; fi
 
    if [ -n "$FW4" ]; then
+      local device_egress_bypass=""
+      if nft list set inet fw4 openclash_bound_macs >/dev/null 2>&1; then
+         device_egress_bypass="ether saddr != @openclash_bound_macs"
+      fi
       if [ "${src_ip}" == "localnetwork" ]; then
          src_ip="ip saddr @localnetwork"
          src_ip_v6="ip6 saddr @localnetwork6"
@@ -1113,14 +1117,14 @@ firewall_lan_ac_traffic()
          target_="${target}"
       fi
 
-      rule_target_v4_="${sport_rule} ${interface_rule} ${dscp_rule} meta nfproto {ipv4} ip daddr != { ${fakeip_range} } ${src_ip} counter ${target_} comment ${comment}"
+      rule_target_v4_="${device_egress_bypass} ${sport_rule} ${interface_rule} ${dscp_rule} meta nfproto {ipv4} ip daddr != { ${fakeip_range} } ${src_ip} counter ${target_} comment ${comment}"
       output_rule_target_v4_="${sport_rule} ${user_rule} ${interface_rule} ${dscp_rule} ip daddr != { ${fakeip_range} } ${src_ip} counter ${target_} comment ${comment}"
-      rule_target_v4="${sport_rule} ${interface_rule} ${dscp_rule} meta nfproto {ipv4} ip daddr != { ${fakeip_range} } ${src_ip} counter ${target} comment ${comment}"
+      rule_target_v4="${device_egress_bypass} ${sport_rule} ${interface_rule} ${dscp_rule} meta nfproto {ipv4} ip daddr != { ${fakeip_range} } ${src_ip} counter ${target} comment ${comment}"
       output_rule_target_v4="${sport_rule} ${user_rule} ${interface_rule} ${dscp_rule} ip daddr != { ${fakeip_range} } ${src_ip} counter ${target} comment ${comment}"
 
-      rule_target_v6_="${sport_rule} ${interface_rule} ${dscp_rule} meta nfproto {ipv6} ip6 daddr != { ${fakeip_range6} } ${src_ip_v6} counter ${target_} comment ${comment}"
+      rule_target_v6_="${device_egress_bypass} ${sport_rule} ${interface_rule} ${dscp_rule} meta nfproto {ipv6} ip6 daddr != { ${fakeip_range6} } ${src_ip_v6} counter ${target_} comment ${comment}"
       output_rule_target_v6_="${sport_rule} ${user_rule} ${interface_rule} ${dscp_rule} ip6 daddr != { ${fakeip_range6} } ${src_ip_v6} counter ${target_} comment ${comment}"
-      rule_target_v6="${sport_rule} ${interface_rule} ${dscp_rule} meta nfproto {ipv6} ip6 daddr != { ${fakeip_range6} } ${src_ip_v6} counter ${target} comment ${comment}"
+      rule_target_v6="${device_egress_bypass} ${sport_rule} ${interface_rule} ${dscp_rule} meta nfproto {ipv6} ip6 daddr != { ${fakeip_range6} } ${src_ip_v6} counter ${target} comment ${comment}"
       output_rule_target_v6="${sport_rule} ${user_rule} ${interface_rule} ${dscp_rule} ip6 daddr != { ${fakeip_range6} } ${src_ip_v6} counter ${target} comment ${comment}"
 
       if [ "${family}" == "both" ] || [ "${family}" == "ipv4" ]; then
@@ -1260,6 +1264,13 @@ firewall_lan_ac_traffic()
    fi
 }
 
+device_egress_exempt()
+{
+   if nft list set inet fw4 openclash_bound_macs >/dev/null 2>&1; then
+      nft insert rule inet fw4 "$1" ether saddr @openclash_bound_macs counter return comment \"OpenClash Device Egress\"
+   fi
+}
+
 set_firewall()
 {
 
@@ -1320,6 +1331,9 @@ fi
 #NFTABLES
 if [ -n "$FW4" ]; then
    LOG_TIP "Firewall4 was Detected, Use NFTABLE Rules..."
+
+   # Create the bound set before any ordinary interception chains exist.
+   lua /usr/share/openclash/device_egress.lua bound || return 1
 
    #china ip route
    if [ "$china_ip_route" != "0" ] || [ "$disable_udp_quic" = "1" ]; then
@@ -1502,6 +1516,7 @@ if [ -n "$FW4" ]; then
       #tcp
       nft 'add chain inet fw4 openclash'
       nft 'flush chain inet fw4 openclash'
+      device_egress_exempt openclash
       nft 'add rule inet fw4 openclash ip daddr @localnetwork counter return'
       nft 'add rule inet fw4 openclash ct direction reply counter return'
       if [ "$lan_ac_mode" = "1" ] && [ -n "$(uci_get_config "lan_ac_white_ips")" ] && [ -n "$(uci_get_config "lan_ac_white_macs")" ]; then
@@ -1546,6 +1561,7 @@ if [ -n "$FW4" ]; then
             proxy_throw_route_add "$fakeip_range"
             nft 'add chain inet fw4 openclash_mangle'
             nft 'flush chain inet fw4 openclash_mangle'
+            device_egress_exempt openclash_mangle
             nft 'add chain inet fw4 openclash_upnp'
             nft 'flush chain inet fw4 openclash_upnp'
             upnp_exclude
@@ -1589,6 +1605,7 @@ if [ -n "$FW4" ]; then
             proxy_throw_route_add "$fakeip_range"
             nft 'add chain inet fw4 openclash_mangle'
             nft 'flush chain inet fw4 openclash_mangle'
+            device_egress_exempt openclash_mangle
             nft add rule inet fw4 openclash_mangle meta l4proto { udp } ip daddr { "$fakeip_range" } mark set "$PROXY_FWMARK" tproxy ip to 127.0.0.1:"$tproxy_port" counter accept
             nft 'add rule inet fw4 mangle_prerouting meta nfproto {ipv4} ip protocol udp counter jump openclash_mangle'
          fi
@@ -1717,6 +1734,7 @@ if [ -n "$FW4" ]; then
 
       nft 'add chain inet fw4 openclash_mangle'
       nft 'flush chain inet fw4 openclash_mangle'
+      device_egress_exempt openclash_mangle
       nft 'add chain inet fw4 openclash_upnp'
       nft 'flush chain inet fw4 openclash_upnp'
       upnp_exclude
@@ -1878,6 +1896,7 @@ if [ -n "$FW4" ]; then
          #tcp
          nft 'add chain inet fw4 openclash_v6'
          nft 'flush chain inet fw4 openclash_v6'
+         device_egress_exempt openclash_v6
          nft 'add rule inet fw4 openclash_v6 ip6 daddr @localnetwork6 counter return'
          nft 'add rule inet fw4 openclash_v6 ct direction reply counter return'
          if [ "$lan_ac_mode" = "1" ] && [ -n "$(uci_get_config "lan_ac_white_ips")" ] && [ -n "$(uci_get_config "lan_ac_white_macs")" ]; then
@@ -1913,6 +1932,7 @@ if [ -n "$FW4" ]; then
       if [ "$enable_v6_udp_proxy" -eq 1 ] || [ "$ipv6_mode" -ne 1 ]; then
          nft 'add chain inet fw4 openclash_mangle_v6'
          nft 'flush chain inet fw4 openclash_mangle_v6'
+         device_egress_exempt openclash_mangle_v6
          nft 'add rule inet fw4 openclash_mangle_v6 ip6 daddr @localnetwork6 counter return'
          nft 'add rule inet fw4 openclash_mangle_v6 ct direction reply counter return'
          if [ "$lan_ac_mode" = "1" ] && [ -n "$(uci_get_config "lan_ac_white_ips")" ] && [ -n "$(uci_get_config "lan_ac_white_macs")" ]; then
@@ -3005,11 +3025,27 @@ if [ -f "/etc/openclash/custom/openclash_custom_firewall_rules.sh" ]; then
    /etc/openclash/custom/openclash_custom_firewall_rules.sh
 fi
 
+if [ -n "$FW4" ]; then
+   lua /usr/share/openclash/device_egress.lua runtime || return 1
+   lua /usr/share/openclash/device_egress.lua record
+fi
+
+# Only explicit device setup failures above should abort startup. Historically
+# errors from optional custom firewall scripts did not gate core startup.
+return 0
+
 } >/dev/null 2>&1
 
 revert_firewall()
 {
    rm -rf /var/etc/openclash.include
+
+   # Runtime routing only. The persistent inet openclash_guard is independent.
+   if [ -f /var/run/openclash-device-route ]; then
+      ip rule del pref 1886 fwmark 0x40000 lookup 789
+      ip route del local default dev lo table 789
+      rm -f /var/run/openclash-device-route
+   fi
 
    ip rule del fwmark "$PROXY_FWMARK" table "$PROXY_ROUTE_TABLE"
    ip route del local 0.0.0.0/0 dev lo table "$PROXY_ROUTE_TABLE"
@@ -3033,11 +3069,11 @@ revert_firewall()
          done
       done
 
-      for handle in $(nft -a list chains |grep -E "chain openclash|OpenClash" |awk -F '# handle ' '{print$2}'); do
+      for handle in $(nft -a list table inet fw4 |grep -E '^[[:space:]]*chain (openclash|OpenClash)' |awk -F '# handle ' '{print$2}'); do
          nft delete chain inet fw4 handle ${handle}
       done
 
-      for handle in $(nft -a list sets |grep -E "set localnetwork|china_ip|lan_ac_|wan_ac_black_|common_ports" |awk -F '# handle ' '{print$2}'); do
+      for handle in $(nft -a list table inet fw4 |grep -E "set localnetwork|set china_ip|set lan_ac_|set wan_ac_black_|set common_ports|set openclash_bound_macs" |awk -F '# handle ' '{print$2}'); do
          nft delete set inet fw4 handle ${handle}
       done
    else
@@ -3890,6 +3926,16 @@ start_service()
       fi
 
       LOG_OUT "Step 4: Start Running The Clash Core..."
+      # Last YAML pass, including quick starts and custom overwrites.
+      if $QUICK_START; then
+         device_egress_config="$CONFIG_FILE"
+      else
+         device_egress_config="$TMP_CONFIG_FILE"
+      fi
+      if ! lua /usr/share/openclash/device_egress.lua generate "$device_egress_config" >> "$LOG_FILE" 2>&1; then
+         LOG_ERROR "Device Egress Listener Generation Failed!"
+         start_fail
+      fi
       start_run_core
 
       LOG_OUT "Step 5: Add Cron Rules, Start Daemons..."

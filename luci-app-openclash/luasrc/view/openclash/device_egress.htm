@@ -1,0 +1,10 @@
+<%+header%>
+<link rel="stylesheet" href="/luci-static/resources/openclash/css/oc-common.css?v=@OPENCLASH_VERSION@">
+<link rel="stylesheet" href="/luci-static/resources/openclash/css/oc-device-egress.css?v=@OPENCLASH_VERSION@">
+<script src="<%=luci.dispatcher.build_url('admin','services','openclash','translate_js')%>?f=common&amp;v=@OPENCLASH_VERSION@&amp;l=<%=luci.i18n.context.lang%>"></script>
+<div class="oc de-page" id="device-egress"
+     data-url="<%=luci.dispatcher.build_url('admin','services','openclash')%>"
+     data-firewall="<%=luci.dispatcher.build_url('admin','network','firewall')%>"
+     data-token="<%=luci.util.pcdata(luci.dispatcher.context.authtoken or '')%>"></div>
+<script src="<%=luci.dispatcher.build_url('admin','services','openclash','translate_js')%>?f=device_egress&amp;v=@OPENCLASH_VERSION@&amp;l=<%=luci.i18n.context.lang%>"></script>
+<%+footer%>

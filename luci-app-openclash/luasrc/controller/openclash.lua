@@ -69,6 +69,9 @@ function index()
 	entry({"admin", "services", "openclash", "core_download"}, call("core_download"))
 	entry({"admin", "services", "openclash", "announcement"}, call("action_announcement"))
 	entry({"admin", "services", "openclash", "settings"},cbi("openclash/settings"),_("Plugin Settings"), 30).leaf = true
+	entry({"admin", "services", "openclash", "device-egress"},template("openclash/device_egress"),_("Device Egress"), 35).leaf = true
+	entry({"admin", "services", "openclash", "device_egress_status"},call("action_device_egress_status")).leaf = true
+	entry({"admin", "services", "openclash", "device_egress_write"},call("action_device_egress_write")).leaf = true
 	entry({"admin", "services", "openclash", "config-overwrite"},cbi("openclash/config-overwrite"),_("Overwrite Settings"), 40).leaf = true
 	entry({"admin", "services", "openclash", "config-subscribe"},cbi("openclash/config-subscribe"),_("Config Subscribe"), 60).leaf = true
 	entry({"admin", "services", "openclash", "servers"},cbi("openclash/servers"),nil).leaf = true
@@ -134,6 +137,37 @@ local fs = require "luci.openclash"
 local json = require "luci.jsonc"
 local uci = require("luci.model.uci").cursor()
 local datatype = require "luci.cbi.datatypes"
+local translate = require("luci.i18n").translate
+
+function action_device_egress_status()
+	local ok, result = pcall(require("luci.device_egress_service").status)
+	HTTP.prepare_content("application/json")
+	HTTP.header("Cache-Control", "no-store")
+	if not ok then HTTP.status(500, "Status unavailable"); HTTP.write_json({error = translate("Unable to retrieve status; retrying.")}); return end
+	HTTP.write_json(result)
+end
+
+function action_device_egress_write()
+	HTTP.prepare_content("application/json")
+	HTTP.header("Cache-Control", "no-store")
+	-- Inherit LuCI's authenticated admin route and also enforce CSRF on every
+	-- mutation, including DHCP reservations, delay tests and guard reapplication.
+	local expected = DISP.context and DISP.context.authtoken
+	if HTTP.getenv("REQUEST_METHOD") ~= "POST" or not expected or expected == "" or HTTP.formvalue("token") ~= expected then
+		HTTP.status(403, "Forbidden"); HTTP.write_json({error = translate("Invalid request token.")}); return
+	end
+	local payload = HTTP.formvalue("payload") or ""
+	local request = #payload <= 65536 and json.parse(payload)
+	if type(request) ~= "table" then HTTP.status(400, "Invalid request"); HTTP.write_json({error = translate("Invalid device settings.")}); return end
+	local result, err, details, arg = require("luci.device_egress_service").mutate(request)
+	if not result then
+		HTTP.status(400, "Operation failed")
+		local message = translate(err)
+		if arg then message = message:format(arg) end
+		HTTP.write_json({error = message, details = details})
+	else HTTP.write_json(result) end
+end
+
 local opkg
 local device_name = uci:get("system", "@system[0]", "hostname")
 local device_arh = SYS.exec("uname -m |tr -d '\n'")
