@@ -1,0 +1,81 @@
+name: device-egress-docker
+services:
+  wan:
+    image: device-egress-peer
+    platform: linux/arm64
+    command: [wan]
+    networks:
+      wan:
+        ipv4_address: 203.0.113.10
+        ipv6_address: fd42:232::10
+        driver_opts: &peer_ipv6
+          com.docker.network.endpoint.sysctls: net.ipv6.conf.IFNAME.accept_ra=0,net.ipv6.conf.IFNAME.autoconf=0
+    cap_add: [NET_ADMIN]
+  router:
+    image: ${HARNESS_ROUTER_IMAGE:-device-egress-openwrt-router}
+    platform: linux/arm64
+    privileged: true
+    stop_grace_period: 2s
+    ports: ["127.0.0.1:${UI_PORT:-18080}:80"]
+    tmpfs:
+      - /tmp
+      - /run
+    networks:
+      lan:
+        interface_name: eth0
+        ipv4_address: 10.231.0.2
+        ipv6_address: fd42:231::2
+      wan:
+        interface_name: eth1
+        ipv4_address: 203.0.113.2
+        ipv6_address: fd42:232::2
+      management:
+        interface_name: eth2
+    sysctls:
+      net.ipv4.ip_forward: '1'
+      net.ipv6.conf.all.forwarding: '1'
+      net.ipv4.conf.all.rp_filter: '0'
+      net.ipv4.conf.default.rp_filter: '0'
+  client:
+    image: device-egress-peer
+    platform: linux/arm64
+    command: [client]
+    cap_add: [NET_ADMIN]
+    networks:
+      lan:
+        ipv4_address: 10.231.0.20
+        ipv6_address: fd42:231::20
+        mac_address: '00:16:3e:00:00:20'
+        driver_opts: *peer_ipv6
+  client2:
+    image: device-egress-peer
+    platform: linux/arm64
+    command: [client]
+    cap_add: [NET_ADMIN]
+    networks:
+      lan:
+        ipv4_address: 10.231.0.21
+        ipv6_address: fd42:231::21
+        mac_address: '00:16:3e:00:00:21'
+        driver_opts: *peer_ipv6
+networks:
+  management:
+    # Docker does not publish ports on an internal-only container. The router
+    # entrypoint removes its default route before starting procd.
+    ipam:
+      config:
+        - subnet: 10.233.0.0/24
+  lan:
+    internal: true
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 10.231.0.0/24
+        - subnet: fd42:231::/64
+  wan:
+    internal: true
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 203.0.113.0/24
+        - subnet: fd42:232::/64
